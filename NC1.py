@@ -5,8 +5,6 @@ import math
 import random
 import csv
 import os
-import cv2
-
 ports_live = None # Set to None if parallel ports not plugged for coding/debugging other parts of exp
 
 ### Experiment details/parameters
@@ -14,13 +12,13 @@ ports_live = None # Set to None if parallel ports not plugged for coding/debuggi
 port_buffer_duration = 1 #needs about 0.5s buffer for port signal to reset 
 pain_response_duration = float("inf")
 response_hold_duration = 1 # How long the rating screen is left on the response (only used for Pain ratings)
-TENS_pulse_int = 0.1 # interval length for TENS on/off signals (e.g. 0.1 = 0.2s per pulse)
+RENS_pulse_int = 0.1 # interval length for RENS on/off signals (e.g. 0.1 = 0.2s per pulse)
 
 # parallel port triggers
 port_address = 0x3ff8
 pain_trig = 2 #levels and order need to be organised through CHEPS system
 eda_trig = 1 #pin 1 to mark trial information on LabChart
-tens_trig = {"TENS": 128, "control": 0} #Pin 8 in relay box just for the clicking sound
+tens_trig = {"RENS": 128, "control": 0} #Pin 8 in relay box just for the clicking sound
 
 ## within experiment parameters
 experimentcode = "NC1"
@@ -78,8 +76,8 @@ while True:
         # Group == 1 == high OD
         # Group == 2 == low OD
         # Group == 3 == NH
-        # cb == 1 == TENS = GREEN, control = BLUE
-        # cb == 2 == TENS = BLUE, control = GREEN
+        # cb == 1 == RENS = GREEN, control = BLUE
+        # cb == 2 == RENS = BLUE, control = GREEN
             
         else:
             if int(P_info["PID"]) % 6 == 1:
@@ -113,22 +111,26 @@ while True:
         print("Participant info input canceled.")
         break  # Exit the loop if the participant info input is canceled
 
+
+block_order = [1, 2, 3, 4]
+random.shuffle(block_order)
+
 # get date and time of experiment start
 datetime = time.strftime("%Y-%m-%d_%H.%M.%S")
 
 #set stimulus colours according to cb 
 stim_colours = {
-  "TENS" : cue_colours[cb-1],
+  "RENS" : cue_colours[cb-1],
   "control": cue_colours[-cb] 
 }
 
 stim_colour_names = {
-    "TENS" : cue_colour_names[cb-1],
+    "RENS" : cue_colour_names[cb-1],
     "control": cue_colour_names[-cb]
 }
 
 stim_positions = {
-    "TENS" : cue_positions[cb-1],
+    "RENS" : cue_positions[cb-1],
     "control" : cue_positions[-cb]
 }
 
@@ -140,36 +142,44 @@ elif ports_live == None:
     pport = None #Get from device Manager
 
 # set up screen
-win = visual.Window(
-    size=(1920, 1080), fullscr= True, screen=0,
+exp_win = visual.Window(
+    size=(1920, 1080), fullscr=True, screen=0,
     allowGUI=False, allowStencil=False,
     monitor="testMonitor", color=[0, 0, 0], colorSpace="rgb1",
     blendMode="avg", useFBO=True,
     units="pix")
 
 # fixation stimulus
-fix_stim = visual.TextStim(win,
+fix_stim = visual.TextStim(exp_win,
                             text = "x",
                             color = "white",
                             height = 50,
                             font = "Roboto Mono Medium")
 
+
+#define waiting function so experiment doesn't freeze as it does with wait()
+def wait(time):
+    countdown_timer = core.CountdownTimer(time)
+    while countdown_timer.getTime() > 0:
+        termination_check()
+        
+
 #create instruction trials
 def instruction_trial(instructions, holdtime=0, spacebar=True, key=None):
-    visual.TextStim(win, text = instructions, **textStim_arguments).draw()
-    win.flip()
+    visual.TextStim(exp_win, text = instructions, **textStim_arguments).draw()
+    exp_win.flip()
     wait(holdtime)
     if key != None:
         event.waitKeys(keyList=key)
     if spacebar == True:
-        visual.TextStim(win, text = instructions, **textStim_arguments).draw()
-        visual.TextStim(win,
+        visual.TextStim(exp_win, text = instructions, **textStim_arguments).draw()
+        visual.TextStim(exp_win,
                         text = "\n\nPress spacebar to continue",
                         pos = (0,-400),
                         **textStim_arguments).draw()
-        win.flip()
+        exp_win.flip()
         event.waitKeys(keyList="space")
-    win.flip()
+    exp_win.flip()
     wait(2)
     
 # Create functions
@@ -184,7 +194,7 @@ def save_data(data):
         trial["groupname"] = groupname
         trial["cb"] = cb
         trial['blockorder'] = block_order
-        trial["tens_colour"] = stim_colour_names["TENS"]
+        trial["tens_colour"] = stim_colour_names["RENS"]
         trial["control_colour"] = stim_colour_names["control"]
         
 
@@ -203,21 +213,21 @@ def save_data(data):
             writer.writerow(trial)
     
 def exit_screen(instructions):
-    win.flip()
-    visual.TextStim(win,
+    exp_win.flip()
+    visual.TextStim(exp_win,
             text = instructions,
             height = text_height,
             color = "white",
             pos = (0,0)).draw()
-    win.flip()
+    exp_win.flip()
     event.waitKeys()
-    win.close()
+    exp_win.close()
     
 def termination_check(): #insert throughout experiment so participants can end at any point.
     keys_pressed = event.getKeys(keyList=["escape"])  # Check for "escape" key during countdown
     if "escape" in keys_pressed:
         if ports_live:
-            pport.setData(0) # Set all pins to 0 to shut off context, TENS, shock etc.
+            pport.setData(0) # Set all pins to 0 to shut off context, RENS, shock etc.
         # Save participant information
 
         save_data(trial_order)
@@ -235,137 +245,106 @@ for i in range(1, num_familiarisation + 1):
     trial = {
         "phase": "familiarisation",
         "blocknum": None,
+        "blockname":None,
         "stimulus": None,
         "outcome": None,
-        "trialname": "familiarisation_" + str(i),
-        "trialtype": "familiarisation",
         "exp_response": None,
         "pain_response": None,
         "iti" : None
     } 
     trial_order.append(trial)
 
-#pre-exposure trials
-num_TENS_preexp = 16
+#### 4 x blocks (4x fixed 12x outcomes with high/low OD)
+num_blocks_conditioning = 4
+num_blocks_extinction = 4
 
-if groupname == "preexposure": 
-    for i in range(1, num_TENS_preexp + 1):
-        trial = {
-            "phase": "preexposure",
-            "blocknum": None,
-            "stimulus": "TENS",
-            "outcome": "none",
-            "trialname": "preexp" + str(i),
-            "trialtype": "baseline",
-            "exp_response": None,
-            "pain_response": None,
-            "iti" : None
-        } 
-        trial_order.append(trial)
-elif groupname != "preexposure": 
-    for i in range(1, num_TENS_preexp + 1):
-        trial = {
-            "phase": "preexposure",
-            "blocknum": None,
-            "stimulus": None,
-            "outcome": "none",
-            "trialname": "preexp" + str(i),
-            "trialtype": "baseline",
-            "exp_response": None,
-            "pain_response": None,
-            "iti" : None
-        } 
-        trial_order.append(trial)
-    
-#### 4 x blocks (4x fixed pseudo-randomised runs of 4x TENs and 4x no-TENS)
-num_blocks_conditioning = 2
-num_blocks_extinction = 2
-
-trial_outcome_blocks = {
-    "highOD": 
-        {
+conditioning_outcome_blocks = {
+    "highOD": [
             ["low4", "high", "low3", "low5", "low3", "low5", "high", "low4", "high", "low5", "low4", "low3"],
             ["low5", "low3", "low4", "high", "high", "low3", "low5", "low4", "low3", "high", "low4", "low5"],
             ["low4", "low3", "low5", "high", "low5", "high", "low3", "low4", "low3", "high", "low4", "low5"],
             ["low5", "low4", "high", "low3", "low3", "low5", "high", "low4", "high", "low3", "low4", "low5"]
-        },
-        "lowOD" : 
-            {
+        ],
+    "lowOD": [
             ["high", "high", "low4", "high", "high", "low3", "high", "high", "low5", "high", "high", "high"],
             ["high", "high", "low5", "high", "low4", "high", "high", "high", "low3", "high", "high", "high"],
             ["low3", "high", "high", "high", "high", "low5", "high", "high", "high", "low4", "high", "high"],
             ["high", "high", "low5", "high", "high", "low3", "high", "high", "low4", "high", "high", "high"]
+        ],
+    "naturalhistory": []
     }
-    }
-
 
 #low heat for every trial in extinction regardless of stimulus
-extinction_outcome_block = ['low']*16
+extinction_outcome_block = ['med']*12
+
+#blockname
+blockname = []
+
+# Populate naturalhistory by alternating between highOD and lowOD by block number
+# cb == 1 starts with highOD, cb == 2 starts with lowOD
+for block in range(1, num_blocks_conditioning + 1):
+    block_idx = block_order[block - 1]
+    if groupname == "naturalhistory":
+        if (block + cb) % 2 == 0:  # cb=1: blocks 1,3 are highOD; cb=2: blocks 1,3 are lowOD
+            conditioning_outcome_blocks["naturalhistory"].append(conditioning_outcome_blocks["highOD"][block_idx - 1])
+            blockname.append(f"highOD_{block_idx}")
+        else:
+            conditioning_outcome_blocks["naturalhistory"].append(conditioning_outcome_blocks["lowOD"][block_idx - 1])
+            blockname.append(f"lowOD_{block_idx}")
+    else:
+        blockname.append(f"{groupname}_{block_idx}")
+
+# calibration trials
+num_calibration = 4
+calibration_outcome_block = ['med'] * num_calibration
+
+for i in range(1, num_calibration + 1):
+    trial = {
+        "phase": "calibration",
+        "blocknum": None,
+        "blockname": None,
+        "stimulus": None,
+        "outcome": calibration_outcome_block[i - 1],
+        "exp_response": None,
+        "pain_response": None,
+        "iti": None
+    }
+    trial_order.append(trial)
+
 
 ### create list of trials based on trial_block order, iterating through stimulus + outcome blocks in parallel
-for block in range(1,num_blocks_conditioning+1):
-    for stimulus,outcome in zip(socialmodel_stim_blocks[block-1],socialmodel_outcome_blocks[block-1]):
+for block in range(1, num_blocks_conditioning + 1):
+    # Create trials for each outcome in this block
+    for outcome in conditioning_outcome_blocks[groupname][block_order[block - 1] - 1]:
         trial = {
             "phase": "conditioning",
             "blocknum": block,
-            "stimulus": stimulus,
-            "outcome": outcome,
-            "trialname": str(stimulus) + "_" + str(outcome),
-            "trialtype": "socialmodel",
-            "exp_response": None,
-            "pain_response": None,
-            "iti" : None
-        }
-        trial_order.append(trial)
-
-#add baseline trials for post-exposure
-num_TENS_postexp = 16
-
-if groupname == "postexposure": 
-    for i in range(1, num_TENS_postexp + 1):
-        trial = {
-            "phase": "postexposure",
-            "blocknum": None,
-            "stimulus": "TENS",
-            "outcome": "none",
-            "trialname": "postexp" + str(i),
-            "trialtype": "baseline",
-            "exp_response": None,
-            "pain_response": None,
-            "iti" : None
-        } 
-        trial_order.append(trial)
-elif groupname != "postexposure": 
-    for i in range(1, num_TENS_postexp + 1):
-        trial = {
-            "phase": "postexposure",
-            "blocknum": None,
+            "blockname": blockname[block - 1],
             "stimulus": None,
-            "outcome": "none",
-            "trialname": "postexp" + str(i),
-            "trialtype": "baseline",
+            "outcome": outcome,
             "exp_response": None,
             "pain_response": None,
-            "iti" : None
-        } 
-        trial_order.append(trial)                    
+            "iti": None
+        }
+        trial_order.append(trial)         
                     
 #create extinction trials, all outcomes same regardless of condition (low heat)
-for block in range(num_blocks_conditioning+1,num_blocks_conditioning+num_blocks_extinction+1):
-    for stimulus,outcome in zip(extinction_stim_blocks[block_order[block-1]],extinction_outcome_block):
+for block in range(num_blocks_conditioning + 1, num_blocks_conditioning + num_blocks_extinction + 1):
+    # All extinction trials use medium heat regardless of group
+    for outcome in extinction_outcome_block:
         trial = {
             "phase": "extinction",
             "blocknum": block,
-            "stimulus": stimulus,
+            "blockname":None,
+            "stimulus": None,
             "outcome": outcome,
-            "trialname": str(stimulus) + "_" + str(outcome),
-            "trialtype": "conditioning",
             "exp_response": None,
             "pain_response": None,
             "iti": None
         }
         trial_order.append(trial)
-        
+
+
 # # Assign trial numbers
 for trialnum, trial in enumerate(trial_order, start=1):
     trial["trialnum"] = trialnum
@@ -378,7 +357,7 @@ instructions_text = {
     
     "familiarisation_1": ("Firstly, you will be familiarised with the thermal stimuli. This familiarisation procedure is necessary to ensure that participants are able to tolerate "
     "the heat pain delivered in this experiment. The thermal stimulus is delivered through the thermode attached to your forearm, which delivers heat pain by selectively stimulating pain fibres.\n\n"
-    "As the density of pain fibres can vary between individuals, the pain experienced and the efficacy of TENS for participants who will receive TENS stimulation can also vary. "
+    "As the density of pain fibres can vary between individuals, the pain experienced and the efficacy of RENS for participants who will receive RENS stimulation can also vary. "
     "As such, this familiarisation procedure will demonstrate the range of how painful the thermal stimulus could be for any participant."),
     
     "familiarisation_2": ("In the familiarisation procedure, you will experience the thermal stimuli at a range of intensities. The machine will start at a low intensity, and incrementally increase each level. "
@@ -412,23 +391,23 @@ instructions_text = {
     
     "baseline_completed": "Baseline measures have been recorded, thank you for your patience.",
     
-    "TENS_example" : "In this experiment you may be asked to observe another participant receiving TENS. Although TENS has an audible cue, we will also present a" + stim_colour_names["TENS"] + " square on the screen to indicate when it is active. No-TENS trials will be indicated by a " + stim_colour_names["control"] + " square.",
+    "RENS_example" : "In this experiment you may be asked to observe another participant receiving RENS. Although RENS has an audible cue, we will also present a" + stim_colour_names["RENS"] + " square on the screen to indicate when it is active. No-RENS trials will be indicated by a " + stim_colour_names["control"] + " square.",
     
-    "TENS_introduction" : "This experiment aims to investigate the effects of Transcutaneous Electrical Nerve Stimulation (TENS) on heat pain sensitivity. "
-    "TENS is designed to increase pain sensitivity by enhancing the conductivity of pain signals being sent to your brain. Clinically this is used to enhance pain sensitivity in medical conditions where pain sensitivity is dampened. "
-    "In the absence of medical conditions, TENS significantly amplifies pain signals, meaning stimulations will be more painful when the TENS device is active. Although the TENS itself is not painful, you will feel a small sensation when it is turned on. \n\n"
-    "In this study you and another participant will receive a series of heat pain stimulations, and some heat pain stimulations will also be accompanied with TENS stimulation.",
+    "RENS_introduction" : "This experiment aims to investigate the effects of Transcutaneous Electrical Nerve Stimulation (RENS) on heat pain sensitivity. "
+    "RENS is designed to increase pain sensitivity by enhancing the conductivity of pain signals being sent to your brain. Clinically this is used to enhance pain sensitivity in medical conditions where pain sensitivity is dampened. "
+    "In the absence of medical conditions, RENS significantly amplifies pain signals, meaning stimulations will be more painful when the RENS device is active. Although the RENS itself is not painful, you will feel a small sensation when it is turned on. \n\n"
+    "In this study you and another participant will receive a series of heat pain stimulations, and some heat pain stimulations will also be accompanied with RENS stimulation.",
     
-    "conditioning" : "We will now begin the main phase of the experiment. You will observe another participant receive a series of thermal stimuli with and without TENS. Your task is to predict how painful the other participant finds the thermal stimulus."
+    "conditioning" : "We will now begin the main phase of the experiment. You will observe another participant receive a series of thermal stimuli with and without RENS. Your task is to predict how painful the other participant finds the thermal stimulus."
     "This rating scale ranges from NOT PAINFUL to VERY PAINFUL. \n\n" +
-    "All thermal stimuli will be signaled by a 10 second countdown. The heat will be delivered at the end of the countdown when an X appears. The TENS will now also be active on some trials. "
-    "To make clear whether the TENS is on or not, TENS will be indicated by a " + stim_colour_names["TENS"] + " square on the screen, whereas no-TENS trials will be indicated by a " + stim_colour_names["control"] + " square. "
+    "All thermal stimuli will be signaled by a 10 second countdown. The heat will be delivered at the end of the countdown when an X appears. The RENS will now also be active on some trials. "
+    "To make clear whether the RENS is on or not, RENS will be indicated by a " + stim_colour_names["RENS"] + " square on the screen, whereas no-RENS trials will be indicated by a " + stim_colour_names["control"] + " square. "
     "As the other participant waits for the thermal stimulus during the countdown, you will be asked to rate how painful you expect their heat to be. After each trial you will find out what pain rating they actually responded with. \n\n"
     "Please wait for the experimenter to set up the stream with the other participant BEFORE pressing SPACEBAR.",
     
     "extinction" : "You will now receive a series of thermal stimuli and rate the intensity of each thermal stimulus. "
-    "Similarly to the other participant, the thermal stimuli will be signaled by a 10 second countdown and the heat will be delivered at the end of the countdown when an X appears. The TENS will now also be active on some trials. "
-    "To make clear whether the TENS is on or not, TENS will be indicated by a " + stim_colour_names["TENS"] + " square on the screen, whereas no-TENS trials will be indicated by a " + stim_colour_names["control"] + " square. "
+    "Similarly to the other participant, the thermal stimuli will be signaled by a 10 second countdown and the heat will be delivered at the end of the countdown when an X appears. The RENS will now also be active on some trials. "
+    "To make clear whether the RENS is on or not, RENS will be indicated by a " + stim_colour_names["RENS"] + " square on the screen, whereas no-RENS trials will be indicated by a " + stim_colour_names["control"] + " square. "
     "During the countdown, you will also be asked to rate how painful you expect the heat to be. After each trial there will also be a brief interval to allow you to rest between thermal stimuli. "
     "You will also receive a brief rest between blocks of trials where the experimenter will move the thermode to another location on your arm. \n\n"
     "Please wait for the experimenter now to prepare the thermal stimuli BEFORE pressing SPACEBAR."
@@ -439,40 +418,62 @@ response_instructions = {
     "pain": "How painful was the heat?",
     "expectancy": "How painful do you expect the thermal stimulus to be?",
     "SM": "The demonstrator made the following response on this trial",
-    "familiarisation": "When you are ready to receive the thermal stimulus, press the SPACEBAR to activate the thermal stimulus. "
+    "familiarisation": "When you are ready to receive the thermal stimulus, press the SPACEBAR to activate the thermal stimulus. ",
+    "choice": "Please choose whether you want to receive RENS on this trial."
     }
 
 trial_text = {
-     None : visual.TextStim(win,
+     None : visual.TextStim(exp_win,
             text=None,
             height = text_height,
             pos = rating_text_pos
             ),
-     "pain": visual.TextStim(win,
+     "pain": visual.TextStim(exp_win,
             text=response_instructions["pain"],
             height = text_height,
             pos = rating_text_pos
             ),
-     "expectancy": visual.TextStim(win,
+     "expectancy": visual.TextStim(exp_win,
             text=response_instructions["expectancy"],
             height = text_height,
             pos = rating_text_pos
-            ),
-     "baseline": visual.TextStim(win,
-            text=instructions_text["baseline_waiting"],
-            height=text_height,
-            pos = (0,250)
-            ),
-     "SMrating": visual.TextStim(win, 
-            color="white", 
-            height = text_height,
-            pos = rating_text_pos,
-            text= response_instructions["SM"]
             )
 }
 
+# Define button_text and buttons dictionaries
+button_text = {
+        "RENS": visual.TextStim(exp_win,
+                    text="RENS",
+                    color="white",
+                    height=25,
+                    pos=(400, -300),
+                    wrapWidth=300
+                    ),
+        "control": visual.TextStim(exp_win,
+                    text="No RENS",
+                    color="white",
+                    height=25,
+                    pos=(-400, -300),
+                    wrapWidth=300
+                    ),
+}
+buttons = {
+        "RENS": visual.Rect(exp_win,
+                    width=300,
+                    height=80,
+                    fillColor="black",
+                    lineColor="white",
+                    pos=(400, -300)),
+        "control": visual.Rect(exp_win,
+                    width=300,
+                    height=80,
+                    fillColor="black",
+                    lineColor="white",
+                    pos=(-400, -300)),
+}
+
 # #Test questions
-rating_stim = { "familiarisation": visual.Slider(win,
+rating_stim = { "familiarisation": visual.Slider(exp_win,
                                     pos = rating_scale_pos,
                                     ticks=[0,50,100],
                                     labels=(1,5,10),
@@ -481,7 +482,7 @@ rating_stim = { "familiarisation": visual.Slider(win,
                                     style=["rating"],
                                     autoLog = False,
                                     labelHeight = 30),
-               "pain": visual.Slider(win,
+               "pain": visual.Slider(exp_win,
                                     pos = rating_scale_pos,
                                     ticks=[0,100],
                                     labels=("Not painful","Very painful"),
@@ -490,7 +491,7 @@ rating_stim = { "familiarisation": visual.Slider(win,
                                     style=["rating"],
                                     autoLog = False,
                                     labelHeight = 30),
-                "expectancy": visual.Slider(win,
+                "expectancy": visual.Slider(exp_win,
                                     pos = rating_scale_pos,
                                     ticks=[0,100],
                                     labels=("Not painful","Very painful"),
@@ -520,20 +521,20 @@ fam_rating = rating_stim["familiarisation"]
 # pre-draw countdown stimuli (numbers 10-1)
 countdown_text = {}
 for i in range(0,11):
-    countdown_text[str(i)] = visual.TextStim(win, 
+    countdown_text[str(i)] = visual.TextStim(exp_win, 
                             color="white", 
                             height = 50,
                             text=str(i))
 
-# visual cues for TENS/control trials
-cue_stims = {"TENS" : visual.Rect(win,
-                        lineColor = stim_colours["TENS"],
-                        fillColor = stim_colours["TENS"],
+# visual cues for RENS/control trials
+cue_stims = {"RENS" : visual.Rect(exp_win,
+                        lineColor = stim_colours["RENS"],
+                        fillColor = stim_colours["RENS"],
                         width = cue_width,
                         height = cue_width,
-                        pos = stim_positions["TENS"],
+                        pos = stim_positions["RENS"],
                         autoLog = False),
-             "control" : visual.Rect(win,
+             "control" : visual.Rect(exp_win,
                         lineColor = stim_colours["control"],
                         fillColor = stim_colours["control"],
                         width = cue_width,
@@ -542,30 +543,18 @@ cue_stims = {"TENS" : visual.Rect(win,
                         autoLog = False)
              }
 
-#Video stimulus (Social modelling)
-video_stim = visual.MovieStim(win,
-                              filename=os.path.join(script_directory, "SM_video.mp4"),
-                              size = video_stim_size,
-                              pos = video_stim_pos,
-                              volume = 1.0,
-                              autoStart=False,
-                              loop = False)
-
-#turn on webcam
-webcam_feed = cv2.VideoCapture(0)
-
 # Define button_text dictionaries
 #### Make trial functions
 def show_fam_trial(current_trial):
     termination_check()
     # Wait for participant to ready up for shock
-    visual.TextStim(win,
+    visual.TextStim(exp_win,
         text=response_instructions["familiarisation"],
         height = 35,
         pos = (0,0),
         wrapWidth= 800
         ).draw()
-    win.flip()
+    exp_win.flip()
     event.waitKeys(keyList = ["space"])
     
     # show fixation stimulus + deliver shock
@@ -573,7 +562,7 @@ def show_fam_trial(current_trial):
         pport.setData(0)
 
     fix_stim.draw()
-    win.flip()
+    exp_win.flip()
     
     if pport != None:
         pport.setData(pain_trig+eda_trig)
@@ -585,7 +574,7 @@ def show_fam_trial(current_trial):
         termination_check()
         trial_text["pain"].draw()
         fam_rating.draw()
-        win.flip()
+        exp_win.flip()
          
     pain_response_end_time = core.getTime() + response_hold_duration # amount of time for participants to adjust slider after making a response
     
@@ -593,259 +582,159 @@ def show_fam_trial(current_trial):
         termination_check()
         trial_text["pain"].draw()
         fam_rating.draw()
-        win.flip()
+        exp_win.flip()
 
     current_trial["pain_response"] = fam_rating.getRating()
     fam_rating.reset()
     
-    win.flip()
+    exp_win.flip()
     core.wait(familiarisation_iti)
     
-def show_trial(current_trial,
-               trialtype,
-               video = None):
-
-    global iti
-   
+def show_trial(current_trial):
     if pport != None:
         pport.setData(0)
+        
+    exp_win.flip()
+
+        #If RENS trial, ask for choice:
     
-    if trialtype == "socialmodel":
-        trial_iti = video_stim_iti  
-          
-    else: 
-        trial_iti = iti
+    for button_name in button_text:
+        buttons[button_name].draw()
+        button_text[button_name].draw()
+
         
-    # Set the initial countdown time to 10 seconds
-    countdown_timer = core.CountdownTimer(10)
+    visual.TextStim(exp_win,
+            text=response_instructions["choice"],
+            height = 35,
+            pos = (0,0),
+            ).draw()
+        
+    exp_win.flip()
+
+    choice_finish = False
+    mouse = event.Mouse()
+
+    while choice_finish == False:
+        termination_check()
+        for button_name, button_rect in buttons.items():
+            if mouse.isPressedIn(button_rect):
+                current_trial["stimulus"] = button_name
+                choice_finish = True
+
     
-    #if pre/post-exposure, show and activate TENS
-    if trialtype == "baseline":  
-            while countdown_timer.getTime() > 8:
-                termination_check()
-                trial_text["baseline"].draw()
-                win.flip()
-                
-                TENS_timer = countdown_timer.getTime() + TENS_pulse_int     
-
-            while countdown_timer.getTime() < 8 and countdown_timer.getTime() > 0: #turn on TENS at 8 seconds
-                termination_check()
-                
-                if pport != None:
-                    if current_trial["stimulus"] != None:
-                    # turn on TENS pulses if TENS trial, at an on/off interval speed of TENS_pulse_int, marking TENS onset with EDA trig
-                        if countdown_timer.getTime() < TENS_timer - TENS_pulse_int:
-                            pport.setData(tens_trig[current_trial["stimulus"]])
-                        if countdown_timer.getTime() < TENS_timer - TENS_pulse_int*2:
-                            pport.setData(0)
-                            TENS_timer = countdown_timer.getTime() 
-                        cue_stims[current_trial["stimulus"]].draw()
-                    trial_text["baseline"].draw()
-                    win.flip() 
-                
-            if pport != None:    
-                pport.setData(0)
+    # Start countdown to shock
+    
+    # Make a count-down screen
+    countdown_timer = core.CountdownTimer(10)  # Set the initial countdown time to 10 seconds
+  
+    while countdown_timer.getTime() > 8:
+        termination_check()
+        countdown_text[str(int(math.ceil(countdown_timer.getTime())))].draw()
+        exp_win.flip()
         
-            if pport!= None:
-                pport.setData(eda_trig)
-
-            win.flip()
-            core.wait(trial_iti)   
-            current_trial["iti"] = trial_iti
-
-            if pport!= None:
-                pport.setData(0) 
-        
-# social modelling conditioning trials
-    if trialtype == "socialmodel":
-        while countdown_timer.getTime() > 8:
-            termination_check()
-            countdown_text[str(int(math.ceil(countdown_timer.getTime())))].draw()
-            video.draw()
-            win.flip()
-            
-        while countdown_timer.getTime() < 8 and countdown_timer.getTime() > 7: #turn on TENS at 8 seconds
-            termination_check()
-            countdown_text[str(int(math.ceil(countdown_timer.getTime())))].draw()
-            cue_stims[current_trial["stimulus"]].draw()
-            video.draw()
-            win.flip()
-
-        while countdown_timer.getTime() < 7 and countdown_timer.getTime() > 0: #ask for expectancy at 7 seconds
-            termination_check()
-            countdown_text[str(int(math.ceil(countdown_timer.getTime())))].draw()
-            video.draw()
-            cue_stims[current_trial["stimulus"]].draw()
-            
-            # Ask for expectancy rating
-            trial_text["expectancy"].draw()
-            exp_rating.draw()
-            video.draw()
-            win.flip()    
-
-        if pport!= None:
-            pport.setData(eda_trig) 
-
-        current_trial["exp_response"] = exp_rating.getRating() #saves the expectancy response for that trial
-        exp_rating.reset() #resets the expectancy slider for subsequent trials
-        
-        buffer_timer = core.CountdownTimer(video_painratings_buffer + port_buffer_duration)   
-                       
-        while buffer_timer.getTime() > 0:
-            video.draw()
-            win.flip() 
-
-        if pport!= None:
-            pport.setData(0) 
-
-        # present social model's pain rating 
-        pain_rating_sm = random.normalvariate(
-                video_painratings_mean[current_trial["stimulus"]],
-                video_painratings_spread[current_trial["stimulus"]])
-        
-        pain_rating.rating = pain_rating_sm
-        pain_rating.readOnly = True
-        
-        iti_timer = core.CountdownTimer(trial_iti)
-        
-        while iti_timer.getTime() > 0:
-            video.draw()
-            trial_text["SMrating"].draw()
-            pain_rating.draw()
-            win.flip()
-                
-        current_trial["pain_response"] = pain_rating.getRating()
-        pain_rating.reset()
-
-        current_trial["iti"] = trial_iti
-            
-    #if it's a conditioning/extinction trial, do regular 10 second countdown with stimuli + pain stimulus etc.  
-      
-    elif trialtype == "standard": 
-        while countdown_timer.getTime() > 8:
-            termination_check()
-            countdown_text[str(int(math.ceil(countdown_timer.getTime())))].draw()
-            win.flip()
-        
-            TENS_timer = countdown_timer.getTime() + TENS_pulse_int
-
-        while countdown_timer.getTime() < 8 and countdown_timer.getTime() > 7: #turn on TENS at 8 seconds
-            termination_check()
-            
-            if pport != None:
-                if current_trial["stimulus"] != None:
-                    # turn on TENS pulses if TENS trial, at an on/off interval speed of TENS_pulse_int, marking TENS onset with EDA trig
-                    if countdown_timer.getTime() < TENS_timer - TENS_pulse_int:
-                        pport.setData(tens_trig[current_trial["stimulus"]])
-                    if countdown_timer.getTime() < TENS_timer - TENS_pulse_int*2:
-                        pport.setData(0)
-                        TENS_timer = countdown_timer.getTime() 
-
-            countdown_text[str(int(math.ceil(countdown_timer.getTime())))].draw()
-            cue_stims[current_trial["stimulus"]].draw()
-            win.flip()
-
-        
-        TENS_timer = countdown_timer.getTime() + TENS_pulse_int
-
-        while countdown_timer.getTime() < 7 and countdown_timer.getTime() > 0: #ask for expectancy at 7 seconds
-            termination_check()
-            if pport != None:                      
-                if current_trial["stimulus"] != None:
-                    # turn on TENS pulses if TENS trial, at an on/off interval speed of TENS_pulse_int, marking TENS onset with EDA trig
-                    if countdown_timer.getTime() < TENS_timer - TENS_pulse_int:
-                        pport.setData(tens_trig[current_trial["stimulus"]])
-                    if countdown_timer.getTime() < TENS_timer - TENS_pulse_int*2:
-                        pport.setData(0)
-                        TENS_timer = countdown_timer.getTime() 
-
-            countdown_text[str(int(math.ceil(countdown_timer.getTime())))].draw()
-            cue_stims[current_trial["stimulus"]].draw()
-            
-            # Ask for expectancy rating
-            trial_text["expectancy"].draw()
-            exp_rating.draw()
-            win.flip()    
-
-        current_trial["exp_response"] = exp_rating.getRating() #saves the expectancy response for that trial
-        exp_rating.reset() #resets the expectancy slider for subsequent trials
-                
-        # deliver shock
+    while countdown_timer.getTime() < 8 and countdown_timer.getTime() > 7: #turn on RENS at 8 seconds if chosen
+        termination_check()
         if pport != None:
-            pport.setData(0)
-        fix_stim.draw()
-        win.flip()
-        
+            pport.setData(tens_trig[current_trial["stimulus"]])
+        countdown_text[str(int(math.ceil(countdown_timer.getTime())))].draw()
+        exp_win.flip()
+
+    while countdown_timer.getTime() < 7 and countdown_timer.getTime() > 0: #ask for expectancy at 7 seconds
+        termination_check()
         if pport != None:
-            pport.setData(pain_trig+eda_trig)
-            core.wait(port_buffer_duration)
-            pport.setData(0)
-
-        # Get pain rating
-        while pain_rating.getRating() is None: # while mouse unclicked
-            pain_rating.readOnly = False
-            termination_check()
-            pain_rating.draw()
-            trial_text["pain"].draw()
-            win.flip()
-                
-                
-        pain_response_end_time = core.getTime() + response_hold_duration # amount of time for participants to adjust slider after making a response
+            pport.setData(tens_trig[current_trial["stimulus"]])
+        countdown_text[str(int(math.ceil(countdown_timer.getTime())))].draw()
         
-        while core.getTime() < pain_response_end_time:
-            termination_check()
-            trial_text["pain"].draw()
-            pain_rating.draw()
-            win.flip()
-            
-        current_trial["pain_response"] = pain_rating.getRating()
-        pain_rating.reset()
+        # Ask for expectancy rating
+        trial_text["expectancy"].draw() 
+        exp_rating.draw()
+        exp_win.flip()    
 
-        win.flip()
-        core.wait(trial_iti)
-        current_trial["iti"] = trial_iti
+    current_trial["exp_response"] = exp_rating.getRating() #saves the expectancy response for that trial
+    exp_rating.reset() #resets the expectancy slider for subsequent trials
+        
+    # deliver shock
+    if pport != None:
+        pport.setData(0)
+    fix_stim.draw()
+    exp_win.flip()
+    
+    if pport != None:
+        pport.setData(pain_trig[current_trial["outcome"]])
+        
+    wait(port_buffer_duration)
+
+    if pport != None:
+        pport.setData(0)
+
+    # Get pain rating
+    while pain_rating.getRating() is None: # while mouse unclicked
+        termination_check()
+        pain_rating.draw()
+        trial_text["pain"].draw()
+        exp_win.flip()
+            
+            
+    pain_response_end_time = core.getTime() + response_hold_duration # amount of time for participants to adjust slider after making a response
+    
+    while core.getTime() < pain_response_end_time:
+        termination_check()
+        trial_text["pain"].draw()
+        pain_rating.draw()
+        exp_win.flip()
+        
+    current_trial["pain_response"] = pain_rating.getRating()
+    pain_rating.reset()
+
+    exp_win.flip()
+    
+    wait(iti)
 
 exp_finish = None        
 lastblocknum = None
 
+# Create second window on second screen to display blockname info
+info_win = visual.Window(
+    size=(600, 400), fullscr=False, screen=1,
+    allowGUI=True, allowStencil=False,
+    monitor="testMonitor", color=[0, 0, 0], colorSpace="rgb1",
+    blendMode="avg", useFBO=True,
+    units="pix")
+
+# Display blockname info
+blockname_text = "Block Order:\n" + "\n".join([f"Block {i+1}: {name}" for i, name in enumerate(blockname)])
+visual.TextStim(info_win, text=blockname_text, height=30, color="white", wrapWidth=550).draw()
+info_win.flip()
+
 # Run experiment
 while not exp_finish:
-    termination_check()
+    # termination_check()
     
-    # # ### introduce TENS and run familiarisation procedure
-    instruction_trial(instructions_text["welcome"],3)
-    instruction_trial(instructions_text["TENS_introduction"],6)
-    instruction_trial(instructions_text["familiarisation_1"],10)
-    instruction_trial(instructions_text["familiarisation_2"],10)
+    # # # ### introduce RENS and run familiarisation procedure
+    # instruction_trial(instructions_text["welcome"],3)
+    # instruction_trial(instructions_text["RENS_introduction"],6)
+    # instruction_trial(instructions_text["familiarisation_1"],10)
+    # instruction_trial(instructions_text["familiarisation_2"],10)
     
-    for trial in list(filter(lambda trial: trial['phase'] == "familiarisation", trial_order)):
-        show_fam_trial(trial)
-    instruction_trial(instructions_text["familiarisation_finish"],2)
+    # for trial in list(filter(lambda trial: trial['phase'] == "familiarisation", trial_order)):
+    #     show_fam_trial(trial)
+    # instruction_trial(instructions_text["familiarisation_finish"],2)
 
-    ### pre-exposure phase
-    instruction_trial(instructions_text["baseline"],10)
-
-    for trial in list(filter(lambda trial: trial['phase'] == "preexposure", trial_order)):
-        show_trial(trial,"baseline")
-    
-    instruction_trial(instructions_text["baseline_completed"],10)
-
-        
-    instruction_trial(instructions_text["extinction"],10)
-    for trial in list(filter(lambda trial: trial['phase'] == "extinction", trial_order)):
+    # instruction_trial(instructions_text["conditioning"],10)
+    for trial in list(filter(lambda trial: trial['phase'] == "conditioning", trial_order)):
         current_blocknum = trial['blocknum']
         if lastblocknum is not None and current_blocknum != lastblocknum:
             instruction_trial(instructions_text["blockrest"],10)
-        show_trial(trial,"standard")
+        show_trial(trial)
         lastblocknum = current_blocknum
 
-    if pport != None:
-        pport.setData(0)
+    # if pport != None:
+    #     pport.setData(0)
         
     # save trial data
     save_data(trial_order)
-    exit_screen(instructions_text["end"])
+    # exit_screen(instructions_text["end"])
     
     exp_finish = True
     
-win.close()
+exp_win.close()
