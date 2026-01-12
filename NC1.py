@@ -54,7 +54,9 @@ while True:
         
         P_info["SONA"] = input("Enter SONA pool ID: ")
 
-        # block_order = [int(block) for block in input("Enter block order: ").split()]
+        
+        block_order = [1, 2, 3, 4]
+        random.shuffle(block_order)
             
         data_filename = P_info["PID"] + "_responses.csv"
         script_directory = os.path.dirname(os.path.abspath(__file__))  #Set the working directory to the folder the Python code is opened from
@@ -111,10 +113,6 @@ while True:
         print("Participant info input canceled.")
         break  # Exit the loop if the participant info input is canceled
 
-
-block_order = [1, 2, 3, 4]
-random.shuffle(block_order)
-
 # get date and time of experiment start
 datetime = time.strftime("%Y-%m-%d_%H.%M.%S")
 
@@ -165,13 +163,14 @@ def wait(time):
         
 
 #create instruction trials
-def instruction_trial(instructions, holdtime=0, spacebar=True, key=None):
+def instruction_trial(instructions, holdtime=0, spacebar_text=True, key=None):
     visual.TextStim(exp_win, text = instructions, **textStim_arguments).draw()
     exp_win.flip()
     wait(holdtime)
     if key != None:
+        termination_check()
         event.waitKeys(keyList=key)
-    if spacebar == True:
+    if spacebar_text == True:
         visual.TextStim(exp_win, text = instructions, **textStim_arguments).draw()
         visual.TextStim(exp_win,
                         text = "\n\nPress spacebar to continue",
@@ -367,17 +366,7 @@ instructions_text = {
     "This procedure will proceed at your pace, so feel free to take your time to rest between heat levels."),
         
     "familiarisation_finish": "Thank you for completing the familiarisation protocol. we will now proceed to the next phase of the experiment",
-    
-    "baseline_waiting": "Collecting baseline readings, please stay still",
 
-    "experiment_webcam_waiting" : ("Waiting for connection..."),
-    
-    "experiment_webcam_ready" : ("Connection found !\n\n"
-                                             "Press SPACEBAR to go live"),
-    
-    "experiment_webcam_finish" : ("Observation phase completed!\n\n"
-                                              "Connection ended."),
-    
     "blockrest" : "This is a rest interval. Please wait for the experimenter to adjust the thermode BEFORE pressing SPACEBAR.", 
     
     "blockresume" : "Feel free to take as much as rest as necessary before starting the next block.",
@@ -386,31 +375,23 @@ instructions_text = {
     
     "termination" : "The experiment has been terminated. Please ask the experimenter to help remove the devices.",
 
-    "baseline" : "We will now record some baseline measures. Please stay seated and stay still during this phase, as excessive movement may interfere with our readings. \n\n \
-    NO thermal stimuli will be delivered during this phase.",
-    
-    "baseline_completed": "Baseline measures have been recorded, thank you for your patience.",
-    
-    "RENS_example" : "In this experiment you may be asked to observe another participant receiving RENS. Although RENS has an audible cue, we will also present a" + stim_colour_names["RENS"] + " square on the screen to indicate when it is active. No-RENS trials will be indicated by a " + stim_colour_names["control"] + " square.",
-    
     "RENS_introduction" : "This experiment aims to investigate the effects of Transcutaneous Electrical Nerve Stimulation (RENS) on heat pain sensitivity. "
     "RENS is designed to increase pain sensitivity by enhancing the conductivity of pain signals being sent to your brain. Clinically this is used to enhance pain sensitivity in medical conditions where pain sensitivity is dampened. "
     "In the absence of medical conditions, RENS significantly amplifies pain signals, meaning stimulations will be more painful when the RENS device is active. Although the RENS itself is not painful, you will feel a small sensation when it is turned on. \n\n"
     "In this study you and another participant will receive a series of heat pain stimulations, and some heat pain stimulations will also be accompanied with RENS stimulation.",
     
-    "conditioning" : "We will now begin the main phase of the experiment. You will observe another participant receive a series of thermal stimuli with and without RENS. Your task is to predict how painful the other participant finds the thermal stimulus."
-    "This rating scale ranges from NOT PAINFUL to VERY PAINFUL. \n\n" +
-    "All thermal stimuli will be signaled by a 10 second countdown. The heat will be delivered at the end of the countdown when an X appears. The RENS will now also be active on some trials. "
-    "To make clear whether the RENS is on or not, RENS will be indicated by a " + stim_colour_names["RENS"] + " square on the screen, whereas no-RENS trials will be indicated by a " + stim_colour_names["control"] + " square. "
-    "As the other participant waits for the thermal stimulus during the countdown, you will be asked to rate how painful you expect their heat to be. After each trial you will find out what pain rating they actually responded with. \n\n"
-    "Please wait for the experimenter to set up the stream with the other participant BEFORE pressing SPACEBAR.",
-    
-    "extinction" : "You will now receive a series of thermal stimuli and rate the intensity of each thermal stimulus. "
-    "Similarly to the other participant, the thermal stimuli will be signaled by a 10 second countdown and the heat will be delivered at the end of the countdown when an X appears. The RENS will now also be active on some trials. "
-    "To make clear whether the RENS is on or not, RENS will be indicated by a " + stim_colour_names["RENS"] + " square on the screen, whereas no-RENS trials will be indicated by a " + stim_colour_names["control"] + " square. "
-    "During the countdown, you will also be asked to rate how painful you expect the heat to be. After each trial there will also be a brief interval to allow you to rest between thermal stimuli. "
-    "You will also receive a brief rest between blocks of trials where the experimenter will move the thermode to another location on your arm. \n\n"
-    "Please wait for the experimenter now to prepare the thermal stimuli BEFORE pressing SPACEBAR."
+    "conditioning" : "You will now receive a series of thermal stimuli and rate the intensity of each thermal stimulus. "
+        "The thermal stimuli will be signaled by a 10 second countdown and the heat will be delivered at the end of the countdown when an X appears. If chosen on a trial, RENS will activate for that particular trial. "
+        "During the countdown, you will also be asked to rate how painful you expect the heat to be. After each trial there will be a brief interval to allow you to rest between thermal stimuli. "
+        "You will also receive a brief rest between blocks of trials where the experimenter will move the thermode to another location on your arm. \n\n"
+        "Please wait for the experimenter now to prepare the thermal stimuli.",
+
+    "calibration" : "You will first begin with four calibration trials to assess your baseline heat tolerance. No RENS will be delivered for these trials",
+
+    "calibration_finish" : "Calibration finished. \n\n" +
+                    "Please wait for the experimenter now to prepare the next set of thermal stimuli.",
+
+    "blockname_text" : "EXPERIMENTER ONLY\n" + "\n".join([f"Block {i+1}: {name}" for i, name in enumerate(blockname)])
     
 }
 
@@ -613,6 +594,7 @@ def show_trial(current_trial):
 
     choice_finish = False
     mouse = event.Mouse()
+   
 
     while choice_finish == False:
         termination_check()
@@ -693,24 +675,26 @@ def show_trial(current_trial):
 exp_finish = None        
 lastblocknum = None
 
-# Create second window on second screen to display blockname info
-info_win = visual.Window(
-    size=(600, 400), fullscr=False, screen=1,
-    allowGUI=True, allowStencil=False,
-    monitor="testMonitor", color=[0, 0, 0], colorSpace="rgb1",
-    blendMode="avg", useFBO=True,
-    units="pix")
+# # Create second window on second screen to display blockname info
+# info_win = visual.Window(
+#     size=(600, 400), fullscr=False, screen=1,
+#     allowGUI=True, allowStencil=False,
+#     monitor="testMonitor", color=[0, 0, 0], colorSpace="rgb1",
+#     blendMode="avg", useFBO=True,
+#     units="pix")
 
-# Display blockname info
-blockname_text = "Block Order:\n" + "\n".join([f"Block {i+1}: {name}" for i, name in enumerate(blockname)])
-visual.TextStim(info_win, text=blockname_text, height=30, color="white", wrapWidth=550).draw()
-info_win.flip()
+# # Display blockname info
+# blockname_text = "Block Order:\n" + "\n".join([f"Block {i+1}: {name}" for i, name in enumerate(blockname)])
+# visual.TextStim(info_win, text=blockname_text, height=30, color="white", wrapWidth=550).draw()
+# info_win.flip()
 
 # Run experiment
 while not exp_finish:
+    exp_win.mouseVisible = True
     # termination_check()
     
     # # # ### introduce RENS and run familiarisation procedure
+    instruction_trial(instructions=instructions_text["blockname_text"],spacebar_text=None,key="return")
     # instruction_trial(instructions_text["welcome"],3)
     # instruction_trial(instructions_text["RENS_introduction"],6)
     # instruction_trial(instructions_text["familiarisation_1"],10)
@@ -721,6 +705,11 @@ while not exp_finish:
     # instruction_trial(instructions_text["familiarisation_finish"],2)
 
     # instruction_trial(instructions_text["conditioning"],10)
+
+    instruction_trial(instructions_text["calibration"],,spacebar_text=None,key="return")
+    for trial in list(filter(lambda trial: trial['phase'] == "calibration", trial_order)):
+        show_fam_trial(trial)
+    
     for trial in list(filter(lambda trial: trial['phase'] == "conditioning", trial_order)):
         current_blocknum = trial['blocknum']
         if lastblocknum is not None and current_blocknum != lastblocknum:
