@@ -29,10 +29,6 @@ info_order = ["PID"]
 # iti_range = [6,8]
 iti = 6
 familiarisation_iti = 3
-cue_colours = ([-1,0.10588,-1],[-1,-1,1]) # 2 colours taken from Kirsten EEG
-cue_colour_names = ('green','blue')
-cue_positions = [(300,0),(-300,0)]
-cue_width = 200
 
 rating_scale_pos = (0,-350)
 rating_text_pos = (0,-250) 
@@ -40,6 +36,10 @@ text_height = 30
 textStim_arguments = {'height':30,
                       'color': "white",
                       'wrapWidth': 960}
+
+RENS_image_size = (400,300)
+RENS_image_pos = (0,200)
+RENS_text_pos = (0,300)
 
 #calculate iti_jitter
 # iti_jitter = [x * 1000 for x in iti_range]
@@ -63,6 +63,10 @@ while True:
         
         #set a path to a "data" folder to save data in
         data_folder = os.path.join(script_directory, "data")
+
+        #set stimuli folder path
+        stimulus_folder =  os.path.join(script_directory, "stimuli")
+        
         
         # if data folder doesn"t exist, create one
         if not os.path.exists(data_folder):
@@ -116,22 +120,6 @@ while True:
 # get date and time of experiment start
 datetime = time.strftime("%Y-%m-%d_%H.%M.%S")
 
-#set stimulus colours according to cb 
-stim_colours = {
-  "RENS" : cue_colours[cb-1],
-  "control": cue_colours[-cb] 
-}
-
-stim_colour_names = {
-    "RENS" : cue_colour_names[cb-1],
-    "control": cue_colour_names[-cb]
-}
-
-stim_positions = {
-    "RENS" : cue_positions[cb-1],
-    "control" : cue_positions[-cb]
-}
-
 if ports_live == True:
     pport = parallel.ParallelPort(address=port_address) #Get from device Manager
     pport.setData(0)
@@ -155,32 +143,47 @@ fix_stim = visual.TextStim(exp_win,
                             font = "Roboto Mono Medium")
 
 
+RENS_image = visual.ImageStim(exp_win,
+                                    image=os.path.join(stimulus_folder, "constant.png"),
+                                    size = RENS_image_size,
+                                    pos = RENS_image_pos
+                                    )
+
+RENS_text = visual.TextStim(exp_win,
+                    text = "You are receiving monopolar TENS",
+                    height = 35,
+                    color = "white",
+                    pos = RENS_text_pos,
+                    wrapWidth= 960
+                    )
+
+
 #define waiting function so experiment doesn't freeze as it does with wait()
 def wait(time):
     countdown_timer = core.CountdownTimer(time)
     while countdown_timer.getTime() > 0:
         termination_check()
-        
 
 #create instruction trials
-def instruction_trial(instructions, holdtime=0, spacebar_text=True, key=None):
+def instruction_trial(instructions, holdtime=0, key="space"):
     visual.TextStim(exp_win, text = instructions, **textStim_arguments).draw()
     exp_win.flip()
     wait(holdtime)
-    if key != None:
-        termination_check()
-        event.waitKeys(keyList=key)
-    if spacebar_text == True:
-        visual.TextStim(exp_win, text = instructions, **textStim_arguments).draw()
+    visual.TextStim(exp_win, text = instructions, **textStim_arguments).draw()
+    if key == "space":
         visual.TextStim(exp_win,
                         text = "\n\nPress spacebar to continue",
                         pos = (0,-400),
                         **textStim_arguments).draw()
-        exp_win.flip()
-        event.waitKeys(keyList="space")
     exp_win.flip()
-    wait(2)
-    
+    while True:
+        termination_check()
+        keys_pressed = event.getKeys(keyList=[key])
+        if key in keys_pressed:
+            exp_win.flip()
+            wait(2)
+            break
+
 # Create functions
     # Save responses to a CSV file
 def save_data(data):
@@ -193,9 +196,6 @@ def save_data(data):
         trial["groupname"] = groupname
         trial["cb"] = cb
         trial['blockorder'] = block_order
-        trial["tens_colour"] = stim_colour_names["RENS"]
-        trial["control_colour"] = stim_colour_names["control"]
-        
 
     # Extract column names from the keys in the first trial dictionary
     colnames = list(trial_order[0].keys())
@@ -355,19 +355,17 @@ instructions_text = {
     "welcome": "Welcome to the experiment! Please read the following instructions carefully.", 
     
     "familiarisation_1": ("Firstly, you will be familiarised with the thermal stimuli. This familiarisation procedure is necessary to ensure that participants are able to tolerate "
-    "the heat pain delivered in this experiment. The thermal stimulus is delivered through the thermode attached to your forearm, which delivers heat pain by selectively stimulating pain fibres.\n\n"
-    "As the density of pain fibres can vary between individuals, the pain experienced and the efficacy of RENS for participants who will receive RENS stimulation can also vary. "
-    "As such, this familiarisation procedure will demonstrate the range of how painful the thermal stimulus could be for any participant."),
-    
-    "familiarisation_2": ("In the familiarisation procedure, you will experience the thermal stimuli at a range of intensities. The machine will start at a low intensity, and incrementally increase each level. "
+    "the heat pain delivered in this experiment. In the familiarisation procedure, you will experience the thermal stimuli at a range of intensities. The machine will start at a low intensity, and incrementally increase each level. "
     "After receiving each thermal stimulus, please give a pain rating for that level of heat by clicking and dragging your mouse on a scale from 1 to 10 where 1 is not painful and 10 is very painful. "
-    "The familiarisation procedure will take you through 10 increasing levels of heat intensities. \n\n Although the higher levels of heat intensities may be more uncomfortable or painful, please note that "
+    "The familiarisation procedure will take you through 10 increasing levels of heat intensities."),
+    
+    "familiarisation_2": ("Although the higher levels of heat intensities may be more uncomfortable or painful, please note that "
     "the maximum level of heat is safe and unlikely to cause you any actual harm. If, however, you find the thermal stimuli intolerable at any stage, please let the experimenter know and we will terminate the experiment immediately. "
     "This procedure will proceed at your pace, so feel free to take your time to rest between heat levels."),
         
     "familiarisation_finish": "Thank you for completing the familiarisation protocol. we will now proceed to the next phase of the experiment",
 
-    "blockrest" : "This is a rest interval. Please wait for the experimenter to adjust the thermode BEFORE pressing SPACEBAR.", 
+    "blockrest" : "This is a rest interval. Please wait for the experimenter to adjust the thermode.", 
     
     "blockresume" : "Feel free to take as much as rest as necessary before starting the next block.",
     
@@ -375,18 +373,18 @@ instructions_text = {
     
     "termination" : "The experiment has been terminated. Please ask the experimenter to help remove the devices.",
 
-    "RENS_introduction" : "This experiment aims to investigate the effects of Transcutaneous Electrical Nerve Stimulation (RENS) on heat pain sensitivity. "
+    "RENS_introduction" : "This experiment aims to investigate the effects of Repetitive Electrical Nerve Stimulation (RENS) on heat pain sensitivity. "
     "RENS is designed to increase pain sensitivity by enhancing the conductivity of pain signals being sent to your brain. Clinically this is used to enhance pain sensitivity in medical conditions where pain sensitivity is dampened. "
-    "In the absence of medical conditions, RENS significantly amplifies pain signals, meaning stimulations will be more painful when the RENS device is active. Although the RENS itself is not painful, you will feel a small sensation when it is turned on. \n\n"
-    "In this study you and another participant will receive a series of heat pain stimulations, and some heat pain stimulations will also be accompanied with RENS stimulation.",
+    "In the absence of medical conditions, RENS significantly reduces pain signals, meaning stimulations will be less painful when the RENS device is active. The RENS itself is not painful, but you will feel a small sensation when it is turned on.",
     
-    "conditioning" : "You will now receive a series of thermal stimuli and rate the intensity of each thermal stimulus. "
+    "conditioning" : "You will now receive a series of thermal stimuli and rate the intensity of each thermal stimulus.  On each trial, you are given the choice of receiving RENS together with the thermal stimulus. "
         "The thermal stimuli will be signaled by a 10 second countdown and the heat will be delivered at the end of the countdown when an X appears. If chosen on a trial, RENS will activate for that particular trial. "
         "During the countdown, you will also be asked to rate how painful you expect the heat to be. After each trial there will be a brief interval to allow you to rest between thermal stimuli. "
         "You will also receive a brief rest between blocks of trials where the experimenter will move the thermode to another location on your arm. \n\n"
         "Please wait for the experimenter now to prepare the thermal stimuli.",
 
-    "calibration" : "You will first begin with four calibration trials to assess your baseline heat tolerance. No RENS will be delivered for these trials",
+    "calibration" : "You will first begin with four calibration trials to assess your baseline heat tolerance. No RENS will be delivered for these trials \n\n"
+        "Please wait for the experimenter now to prepare the thermal stimuli.",
 
     "calibration_finish" : "Calibration finished. \n\n" +
                     "Please wait for the experimenter now to prepare the next set of thermal stimuli.",
@@ -507,23 +505,6 @@ for i in range(0,11):
                             height = 50,
                             text=str(i))
 
-# visual cues for RENS/control trials
-cue_stims = {"RENS" : visual.Rect(exp_win,
-                        lineColor = stim_colours["RENS"],
-                        fillColor = stim_colours["RENS"],
-                        width = cue_width,
-                        height = cue_width,
-                        pos = stim_positions["RENS"],
-                        autoLog = False),
-             "control" : visual.Rect(exp_win,
-                        lineColor = stim_colours["control"],
-                        fillColor = stim_colours["control"],
-                        width = cue_width,
-                        height = cue_width,
-                        pos = stim_positions["control"],
-                        autoLog = False)
-             }
-
 # Define button_text dictionaries
 #### Make trial functions
 def show_fam_trial(current_trial):
@@ -616,6 +597,8 @@ def show_trial(current_trial):
         
     while countdown_timer.getTime() < 8 and countdown_timer.getTime() > 7: #turn on RENS at 8 seconds if chosen
         termination_check()
+        if current_trial["stimulus"] == "RENS":
+            RENS_image.draw()
         if pport != None:
             pport.setData(tens_trig[current_trial["stimulus"]])
         countdown_text[str(int(math.ceil(countdown_timer.getTime())))].draw()
@@ -623,6 +606,8 @@ def show_trial(current_trial):
 
     while countdown_timer.getTime() < 7 and countdown_timer.getTime() > 0: #ask for expectancy at 7 seconds
         termination_check()
+        if current_trial["stimulus"] == "RENS":
+            RENS_image.draw()
         if pport != None:
             pport.setData(tens_trig[current_trial["stimulus"]])
         countdown_text[str(int(math.ceil(countdown_timer.getTime())))].draw()
@@ -694,35 +679,34 @@ while not exp_finish:
     # termination_check()
     
     # # # ### introduce RENS and run familiarisation procedure
-    instruction_trial(instructions=instructions_text["blockname_text"],spacebar_text=None,key="return")
-    # instruction_trial(instructions_text["welcome"],3)
-    # instruction_trial(instructions_text["RENS_introduction"],6)
-    # instruction_trial(instructions_text["familiarisation_1"],10)
-    # instruction_trial(instructions_text["familiarisation_2"],10)
+    instruction_trial(instructions=instructions_text["blockname_text"],key="return")
+    instruction_trial(instructions_text["welcome"],2)
+    instruction_trial(instructions_text["RENS_introduction"],6)
+    instruction_trial(instructions_text["familiarisation_1"],10)
+    instruction_trial(instructions_text["familiarisation_2"],10)
     
-    # for trial in list(filter(lambda trial: trial['phase'] == "familiarisation", trial_order)):
-    #     show_fam_trial(trial)
-    # instruction_trial(instructions_text["familiarisation_finish"],2)
+    for trial in list(filter(lambda trial: trial['phase'] == "familiarisation", trial_order)):
+        show_fam_trial(trial)
+    instruction_trial(instructions_text["familiarisation_finish"],2)
 
-    # instruction_trial(instructions_text["conditioning"],10)
-
-    instruction_trial(instructions_text["calibration"],,spacebar_text=None,key="return")
+    instruction_trial(instructions_text["calibration"],key="return")
     for trial in list(filter(lambda trial: trial['phase'] == "calibration", trial_order)):
         show_fam_trial(trial)
-    
+    instruction_trial(instructions_text["calibration_finish"],holdtime = 3, key = None)
+    instruction_trial(instructions_text["conditioning"],key="return")
     for trial in list(filter(lambda trial: trial['phase'] == "conditioning", trial_order)):
         current_blocknum = trial['blocknum']
         if lastblocknum is not None and current_blocknum != lastblocknum:
-            instruction_trial(instructions_text["blockrest"],10)
+            instruction_trial(instructions_text["blockrest"],key="return")
         show_trial(trial)
         lastblocknum = current_blocknum
 
-    # if pport != None:
-    #     pport.setData(0)
+    if pport != None:
+        pport.setData(0)
         
     # save trial data
     save_data(trial_order)
-    # exit_screen(instructions_text["end"])
+    exit_screen(instructions_text["end"])
     
     exp_finish = True
     
