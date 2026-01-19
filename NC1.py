@@ -15,9 +15,9 @@ response_hold_duration = 1 # How long the rating screen is left on the response 
 RENS_pulse_int = 0.1 # interval length for RENS on/off signals (e.g. 0.1 = 0.2s per pulse)
 
 # parallel port triggers
-port_address = 0x3ff8
-pain_trig = 2 #levels and order need to be organised through CHEPS system
-eda_trig = 1 #pin 1 to mark trial information on LabChart
+port_address = 0x4fb8
+pain_trig = 1 #levels and order need to be organised through CHEPS system
+eda_trig = 2 #pin 1 to mark trial information on LabChart
 tens_trig = {"RENS": 128, "control": 0} #Pin 8 in relay box just for the clicking sound
 
 ## within experiment parameters
@@ -375,7 +375,7 @@ instructions_text = {
     
     "termination" : "The experiment has been terminated. Please ask the experimenter to help remove the devices.",
 
-    "RENS_introduction" : "This experiment aims to investigate the effects of Transcutaneous Electrical Nerve Stimulation (RENS) on heat pain sensitivity. "
+    "RENS_introduction" : "This experiment aims to investigate the effects of Repetitive Electrical Nerve Stimulation (RENS) on heat pain sensitivity. "
     "RENS is designed to increase pain sensitivity by enhancing the conductivity of pain signals being sent to your brain. Clinically this is used to enhance pain sensitivity in medical conditions where pain sensitivity is dampened. "
     "In the absence of medical conditions, RENS significantly amplifies pain signals, meaning stimulations will be more painful when the RENS device is active. Although the RENS itself is not painful, you will feel a small sensation when it is turned on. \n\n"
     "In this study you and another participant will receive a series of heat pain stimulations, and some heat pain stimulations will also be accompanied with RENS stimulation.",
@@ -695,18 +695,18 @@ while not exp_finish:
     
     # # # ### introduce RENS and run familiarisation procedure
     instruction_trial(instructions=instructions_text["blockname_text"],spacebar_text=None,key="return")
-    # instruction_trial(instructions_text["welcome"],3)
-    # instruction_trial(instructions_text["RENS_introduction"],6)
-    # instruction_trial(instructions_text["familiarisation_1"],10)
-    # instruction_trial(instructions_text["familiarisation_2"],10)
+    instruction_trial(instructions_text["welcome"],3)
+    instruction_trial(instructions_text["RENS_introduction"],6)
+    instruction_trial(instructions_text["familiarisation_1"],10)
+    instruction_trial(instructions_text["familiarisation_2"],10)
     
-    # for trial in list(filter(lambda trial: trial['phase'] == "familiarisation", trial_order)):
-    #     show_fam_trial(trial)
-    # instruction_trial(instructions_text["familiarisation_finish"],2)
+    for trial in list(filter(lambda trial: trial['phase'] == "familiarisation", trial_order)):
+        show_fam_trial(trial)
+    instruction_trial(instructions_text["familiarisation_finish"],2)
 
-    # instruction_trial(instructions_text["conditioning"],10)
-
-    instruction_trial(instructions_text["calibration"],,spacebar_text=None,key="return")
+    instruction_trial(instructions_text["conditioning"],10)
+    instruction_trial(instructions_text["calibration"],spacebar_text=None,key="return")
+    
     for trial in list(filter(lambda trial: trial['phase'] == "calibration", trial_order)):
         show_fam_trial(trial)
     
