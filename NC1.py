@@ -176,13 +176,16 @@ def instruction_trial(instructions, holdtime=0, key="space"):
                         pos = (0,-400),
                         **textStim_arguments).draw()
     exp_win.flip()
-    while True:
-        termination_check()
-        keys_pressed = event.getKeys(keyList=[key])
-        if key in keys_pressed:
-            exp_win.flip()
-            wait(2)
-            break
+
+    if key != None:
+        while True:
+            termination_check()
+            keys_pressed = event.getKeys(keyList=[key])
+            if key in keys_pressed:
+                exp_win.flip()
+                break
+            
+    wait(2)
 
 # Create functions
     # Save responses to a CSV file
@@ -386,8 +389,7 @@ instructions_text = {
     "calibration" : "You will first begin with four calibration trials to assess your baseline heat tolerance. No RENS will be delivered for these trials \n\n"
         "Please wait for the experimenter now to prepare the thermal stimuli.",
 
-    "calibration_finish" : "Calibration finished. \n\n" +
-                    "Please wait for the experimenter now to prepare the next set of thermal stimuli.",
+    "calibration_finish" : "Calibration finished.",
 
     "blockname_text" : "EXPERIMENTER ONLY\n" + "\n".join([f"Block {i+1}: {name}" for i, name in enumerate(blockname)])
     
@@ -590,24 +592,13 @@ def show_trial(current_trial):
     # Make a count-down screen
     countdown_timer = core.CountdownTimer(10)  # Set the initial countdown time to 10 seconds
   
-    while countdown_timer.getTime() > 8:
+    while countdown_timer.getTime() > 7:
         termination_check()
-        countdown_text[str(int(math.ceil(countdown_timer.getTime())))].draw()
-        exp_win.flip()
-        
-    while countdown_timer.getTime() < 8 and countdown_timer.getTime() > 7: #turn on RENS at 8 seconds if chosen
-        termination_check()
-        if current_trial["stimulus"] == "RENS":
-            RENS_image.draw()
-        if pport != None:
-            pport.setData(tens_trig[current_trial["stimulus"]])
         countdown_text[str(int(math.ceil(countdown_timer.getTime())))].draw()
         exp_win.flip()
 
-    while countdown_timer.getTime() < 7 and countdown_timer.getTime() > 0: #ask for expectancy at 7 seconds
+    while countdown_timer.getTime() < 7 and countdown_timer.getTime() > 4: #ask for expectancy at 7 seconds
         termination_check()
-        if current_trial["stimulus"] == "RENS":
-            RENS_image.draw()
         if pport != None:
             pport.setData(tens_trig[current_trial["stimulus"]])
         countdown_text[str(int(math.ceil(countdown_timer.getTime())))].draw()
@@ -617,22 +608,34 @@ def show_trial(current_trial):
         exp_rating.draw()
         exp_win.flip()    
 
+            
+    while countdown_timer.getTime() < 4 and countdown_timer.getTime() > 0: #turn on RENS at 8 seconds if chosen
+        termination_check()
+        if current_trial["stimulus"] == "RENS":
+            RENS_image.draw()
+                        
+    # start heat ramp
+        if pport != None:
+            pport.setData(tens_trig[current_trial["stimulus"]]+pain_trig[current_trial["outcome"]])
+
+        countdown_text[str(int(math.ceil(countdown_timer.getTime())))].draw()
+        
+        # Keep expectancy rating
+        trial_text["expectancy"].draw() 
+        exp_rating.draw()
+        exp_win.flip()    
+
+
     current_trial["exp_response"] = exp_rating.getRating() #saves the expectancy response for that trial
     exp_rating.reset() #resets the expectancy slider for subsequent trials
-        
-    # deliver shock
-    if pport != None:
-        pport.setData(0)
-    fix_stim.draw()
-    exp_win.flip()
-    
-    if pport != None:
-        pport.setData(pain_trig[current_trial["outcome"]])
-        
-    wait(port_buffer_duration)
 
     if pport != None:
         pport.setData(0)
+        
+    fix_stim.draw()
+    exp_win.flip()
+
+    wait(0.5)
 
     # Get pain rating
     while pain_rating.getRating() is None: # while mouse unclicked
@@ -660,23 +663,10 @@ def show_trial(current_trial):
 exp_finish = None        
 lastblocknum = None
 
-# # Create second window on second screen to display blockname info
-# info_win = visual.Window(
-#     size=(600, 400), fullscr=False, screen=1,
-#     allowGUI=True, allowStencil=False,
-#     monitor="testMonitor", color=[0, 0, 0], colorSpace="rgb1",
-#     blendMode="avg", useFBO=True,
-#     units="pix")
-
-# # Display blockname info
-# blockname_text = "Block Order:\n" + "\n".join([f"Block {i+1}: {name}" for i, name in enumerate(blockname)])
-# visual.TextStim(info_win, text=blockname_text, height=30, color="white", wrapWidth=550).draw()
-# info_win.flip()
-
 # Run experiment
 while not exp_finish:
     exp_win.mouseVisible = True
-    # termination_check()
+    termination_check()
     
     # # # ### introduce RENS and run familiarisation procedure
     instruction_trial(instructions=instructions_text["blockname_text"],key="return")
@@ -684,7 +674,7 @@ while not exp_finish:
     instruction_trial(instructions_text["RENS_introduction"],6)
     instruction_trial(instructions_text["familiarisation_1"],10)
     instruction_trial(instructions_text["familiarisation_2"],10)
-    
+     
     for trial in list(filter(lambda trial: trial['phase'] == "familiarisation", trial_order)):
         show_fam_trial(trial)
     instruction_trial(instructions_text["familiarisation_finish"],2)
@@ -692,8 +682,10 @@ while not exp_finish:
     instruction_trial(instructions_text["calibration"],key="return")
     for trial in list(filter(lambda trial: trial['phase'] == "calibration", trial_order)):
         show_fam_trial(trial)
+        
     instruction_trial(instructions_text["calibration_finish"],holdtime = 3, key = None)
     instruction_trial(instructions_text["conditioning"],key="return")
+    
     for trial in list(filter(lambda trial: trial['phase'] == "conditioning", trial_order)):
         current_blocknum = trial['blocknum']
         if lastblocknum is not None and current_blocknum != lastblocknum:
