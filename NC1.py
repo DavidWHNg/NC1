@@ -15,9 +15,9 @@ response_hold_duration = 1 # How long the rating screen is left on the response 
 RENS_pulse_int = 0.1 # interval length for RENS on/off signals (e.g. 0.1 = 0.2s per pulse)
 
 # parallel port triggers
-port_address = 0x3ff8
-pain_trig = 2 #levels and order need to be organised through CHEPS system
-eda_trig = 1 #pin 1 to mark trial information on LabChart
+port_address = 0x4fb8
+pain_trig = 1 #levels and order need to be organised through CHEPS system
+eda_trig = 2 #pin 1 to mark trial information on LabChart
 tens_trig = {"RENS": 128, "control": 0} #Pin 8 in relay box just for the clicking sound
 
 ## within experiment parameters
@@ -669,8 +669,13 @@ while not exp_finish:
     termination_check()
     
     # # # ### introduce RENS and run familiarisation procedure
+<<<<<<< HEAD
+    instruction_trial(instructions=instructions_text["blockname_text"],spacebar_text=None,key="return")
+    instruction_trial(instructions_text["welcome"],3)
+=======
     instruction_trial(instructions=instructions_text["blockname_text"],key="return")
     instruction_trial(instructions_text["welcome"],2)
+>>>>>>> origin/main
     instruction_trial(instructions_text["RENS_introduction"],6)
     instruction_trial(instructions_text["familiarisation_1"],10)
     instruction_trial(instructions_text["familiarisation_2"],10)
@@ -679,7 +684,13 @@ while not exp_finish:
         show_fam_trial(trial)
     instruction_trial(instructions_text["familiarisation_finish"],2)
 
+<<<<<<< HEAD
+    instruction_trial(instructions_text["conditioning"],10)
+    instruction_trial(instructions_text["calibration"],spacebar_text=None,key="return")
+    
+=======
     instruction_trial(instructions_text["calibration"],key="return")
+>>>>>>> origin/main
     for trial in list(filter(lambda trial: trial['phase'] == "calibration", trial_order)):
         show_fam_trial(trial)
         
